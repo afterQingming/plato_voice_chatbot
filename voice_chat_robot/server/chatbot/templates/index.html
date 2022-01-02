@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>ChatBot</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <link rel="stylesheet" href="{{ url_for(static_local, filename='styles/style.css') }}">
+  <script src="{{ url_for(static_global, filename='/js/jquery.min.js') }}"></script>
+</head>
+
+<body>
+  <!-- partial:index.partial.html -->
+  <section class="msger">
+    <header class="msger-header">
+      <div class="msger-header-title">
+        <i class="fas fa-bug"></i> Chatbot <i class="fas fa-bug"></i>
+      </div>
+    </header>
+
+    <main class="msger-chat">
+      <div class="msg left-msg">
+        <div class="msg-img" style="background-image: url(https://image.flaticon.com/icons/svg/327/327779.svg)"></div>
+
+        <div class="msg-bubble">
+          <div class="msg-info">
+            <div class="msg-info-name">ChatBot</div>
+            <div class="msg-info-time">12:45</div>
+          </div>
+
+          <div class="msg-text">
+             😄
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <form class="msger-inputarea">
+      <input type="text" class="msger-input" id="textInput" placeholder="Enter your message...">
+      <button type="button" class="msger-send-btn-voice" onclick="record_and_send()">开始录音</button>
+      <button type="submit" class="msger-send-btn">Send</button>
+    </form>
+    <audio class="audio-player"></audio>
+  </section>
+  <!-- partial -->
+  <script src='https://use.fontawesome.com/releases/v5.0.13/js/all.js'></script>
+  <!-- <script type="application/javascript" src="https://cdn.bootcss.com/recorderjs/0.1.0/recorder.js"></script> -->
+  <script src="{{ url_for(static_local, filename='/js/recorder.js') }}"></script>
+  <script>
+
+    const msgerForm = get(".msger-inputarea");
+    const msgerInput = get(".msger-input");
+    const msgerChat = get(".msger-chat");
+    const msgerChatVoice = get(".msger-send-btn-voice");
+    const audio = get(".audio-player");
+
+
+    // Icons made by Freepik from www.flaticon.com
+    const BOT_IMG = "https://image.flaticon.com/icons/svg/327/327779.svg";
+    const PERSON_IMG = "https://image.flaticon.com/icons/svg/145/145867.svg";
+    const BOT_NAME = "ChatBot";
+    const PERSON_NAME = "You";
+
+    msgerForm.addEventListener("submit", event => {
+      event.preventDefault();
+
+      const msgText = msgerInput.value;
+      if (!msgText) return;
+
+      appendMessage(PERSON_NAME, PERSON_IMG, "right", msgText);
+      msgerInput.value = "";
+      botResponse(msgText);
+    });
+
+    function appendMessage(name, img, side, text) {
+      //   Simple solution for small apps
+      const msgHTML = `
+<div class="msg ${side}-msg">
+  <div class="msg-img" style="background-image: url(${img})"></div>
+  <div class="msg-bubble">
+    <div class="msg-info">
+      <div class="msg-info-name">${name}</div>
+      <div class="msg-info-time">${formatDate(new Date())}</div>
+    </div>
+    <div class="msg-text">${text}</div>
+  </div>
+</div>
+`;
+
+      msgerChat.insertAdjacentHTML("beforeend", msgHTML);
+      msgerChat.scrollTop += 500;
+    }
+
+    function botResponse(rawText) {
+
+      // Bot Response
+      $.get(
+        `{{url_for(get_bot_response)}}?msg=${rawText}`).done(function (data) {
+        console.log(rawText);
+        console.log(data);
+        const msgText = data;
+        appendMessage(BOT_NAME, BOT_IMG, "left", msgText);
+
+      });
+
+    }
+
+
+    // Utils
+    function get(selector, root = document) {
+      return root.querySelector(selector);
+    }
+
+    function formatDate(date) {
+      const h = "0" + date.getHours();
+      const m = "0" + date.getMinutes();
+
+      return `${h.slice(-2)}:${m.slice(-2)}`;
+    }
+
+
+
+  </script>
+
+  <script>
+    msgerForm.setAttribute("recorder_type", true);
+    let recorder = new Recorder({
+        sampleBits: 16,         // 采样位数，支持 8 或 16，默认是16
+        sampleRate: 16000,      // 采样率，支持 11025、16000、22050、24000、44100、48000，根据浏览器默认值，我的chrome是48000
+        numChannels: 1,         // 声道，支持 1 或 2， 默认是1
+        compiling: false       // 是否边录边转换，默认是false
+    });
+    var AudioContext = window.AudioContext || window.webkitAudioContext || window.mozAudioContext || window.msAudioContext || window.oAudioContext;
+    var audioCtx = AudioContext ? new AudioContext() : '';
+    // javascript function that uploads a blob to upload.php
+    function uploadBlob(blob, filename){
+        // create a blob here for testing
+        var fd = new FormData();
+        fd.append('name', filename);
+        fd.append('audio_file', blob);
+        fd.set('filename', filename);
+        $.ajax({
+            type: 'POST',
+            url: `{{url_for(get_voice_response)}}`,
+            data: fd,
+            processData: false,
+            contentType: false
+        }).done(function(data) {
+            
+          appendMessage(PERSON_NAME, PERSON_IMG, "right", data.user);
+          appendMessage(BOT_NAME, BOT_IMG, "left", data.bot);
+          var oReq = new XMLHttpRequest();
+          oReq.open("GET", `{{url_for(text2voice)}}?msg=${data.bot}`, true);
+          oReq.responseType = "arraybuffer";
+          oReq.onload = function(oEvent) {
+            var blob = new Blob([oReq.response], {type: "audio/wav"});
+            var url = URL.createObjectURL(blob);
+            var res = oReq.response;
+            // window.res = res
+            if (res) {
+              audio.src=url
+              audio.play()
+            }
+
+
+          };
+          oReq.onerror = function() {
+              console.log('音频加载失败..');
+          };
+          oReq.send();
+        });
+ 
+    }
+    function record_and_send() {
+      if (msgerForm.getAttribute("recorder_type" )== 'true'){
+        begin() 
+      }else{
+        stop()
+      }
+    }
+    function begin() {
+        // alert('开始录音');
+        recorder.start().then(() => {
+            // 开始录音
+          msgerChatVoice.innerHTML  ="正在录音"
+          msgerForm.setAttribute("recorder_type", 'false')
+            console.log("recording...")
+        }, (error) => {
+            // 出错了
+            console.log(`${error.name} : ${error.message}`);
+            
+            appendMessage(BOT_NAME, BOT_IMG, "left", `调用浏览器录音出错: ${error.message}`);
+            appendMessage(BOT_NAME, BOT_IMG, "left", "对于高版本浏览器请考虑设置 \" Insecure origins treated as secure \" 选项，设置为允许，或者添加服务器ip ");
+          
+            appendMessage(BOT_NAME, BOT_IMG, "left", `你也可以考虑本地部署，通过localhost访问`);
+            msgerChatVoice.innerHTML  ="开始录音"
+          msgerForm.setAttribute("recorder_type", 'true')
+        });
+    }
+ 
+    function stop() {
+        // alert('停止录音');
+        msgerForm.setAttribute("recorder_type", 'true')
+        msgerChatVoice.innerHTML  ="开始录音"
+        //recorder.stop();
+        recorder.stop();
+        // recorder.play();
+        var blob = recorder.getPCMBlob();
+        var url = URL.createObjectURL(blob);
+        if(blob.size<3*1024*1024){
+            uploadBlob(blob, "adsfas.pcm");
+        }
+        // 销毁录音实例，置为null释放资源，fn为回调函数，
+        // recorder.destroy().then(function() {
+        //     recorder = null;
+        // });
+        // history.go(0);
+    }
+
+</script>
+
+</body>
+
+</html>
